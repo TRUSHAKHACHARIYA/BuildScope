@@ -1,0 +1,15 @@
+{
+  "name": "@buildscope/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@buildscope/config": "workspace:*",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22",
+    "typescript": "^5"
+  }
+}
