@@ -33,11 +33,26 @@ db-up: .env ## Start only PostgreSQL in Docker
 	docker compose up -d postgres
 
 .PHONY: dev-api dev-web
-dev-api: .env ## Run the API locally with auto-reload (needs PostgreSQL)
+dev-api: .env migrate ## Run the API locally with auto-reload (needs PostgreSQL)
 	$(UV) uvicorn app.main:app --reload --port 8000
 
 dev-web: ## Run the web app locally with hot reload
 	pnpm --filter @buildscope/web dev
+
+# --- Database ----------------------------------------------------------------
+.PHONY: migrate migration migrate-down migrate-check
+migrate: .env ## Apply database migrations
+	$(UV) alembic upgrade head
+
+migration: ## Create a migration from model changes: make migration m="add foo"
+	@test -n "$(m)" || (echo 'Usage: make migration m="describe the change"' && exit 1)
+	$(UV) alembic revision --autogenerate -m "$(m)"
+
+migrate-down: ## Roll back the latest migration
+	$(UV) alembic downgrade -1
+
+migrate-check: ## Fail if models and migrations are out of sync
+	$(UV) alembic check
 
 # --- Quality -----------------------------------------------------------------
 .PHONY: lint lint-api lint-web
@@ -66,19 +81,19 @@ typecheck-api:
 typecheck-web:
 	pnpm typecheck
 
-.PHONY: test test-api test-api-integration test-web e2e
+.PHONY: test test-api test-api-cov test-web e2e
 test: test-api test-web ## Run unit tests (API + web)
 
-test-api: ## Run API unit tests
+test-api: ## Run API tests (needs PostgreSQL; uses TEST_DATABASE_URL)
 	$(UV) pytest
 
-test-api-integration: ## Run API integration tests (needs PostgreSQL)
-	$(UV) pytest -m integration
+test-api-cov: ## Run API tests with a coverage report
+	$(UV) pytest --cov --cov-report=term-missing
 
 test-web: ## Run web unit tests
 	pnpm --filter @buildscope/web test
 
-e2e: ## Run Playwright E2E tests against a running stack
+e2e: ## Run Playwright E2E tests against a running stack (start web with AUTH_RATE_LIMIT_ENABLED=false)
 	pnpm --filter @buildscope/e2e e2e
 
 .PHONY: build
@@ -86,4 +101,4 @@ build: ## Production build of the web app
 	pnpm --filter @buildscope/web build
 
 .PHONY: check
-check: lint typecheck test ## Lint, type-check and unit-test everything
+check: lint typecheck migrate-check test ## Lint, type-check and test everything

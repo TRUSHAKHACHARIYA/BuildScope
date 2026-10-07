@@ -6,8 +6,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev:web": "pnpm --filter @buildscope/web dev",
-    "build": "pnpm -r build",
+    "dev:web": "node init && pnpm --filter @buildscope/web dev",
+    "build": "node init && pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
