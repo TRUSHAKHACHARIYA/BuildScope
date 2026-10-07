@@ -1,6 +1,4 @@
 # Secrets
-.env
-.env.*
 !.env.example
 
 # Node
@@ -31,10 +29,10 @@ blob-report/
 # OS / editors
 .DS_Store
 .idea/
-.vscode/*
 !.vscode/extensions.json
 
 # Misc
 *.pem
 *.log
 .vercel
+config.bat
