@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     )
     database_connect_timeout_seconds: float = Field(default=3.0, gt=0)
 
+    # Authentication: tokens are issued by Better Auth (apps/web) and verified here via JWKS.
+    auth_jwks_url: str = "http://localhost:3000/api/auth/jwks"
+    auth_jwt_issuer: str = "http://localhost:3000"
+    auth_jwt_audience: str = "buildscope-api"
+    auth_jwks_timeout_seconds: float = Field(default=5.0, gt=0)
+
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:3000"]
     )
