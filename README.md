@@ -3,8 +3,8 @@
 AI-powered project discovery and product intelligence. A user describes a project; BuildScope
 researches the market and competitors and produces an evidence-backed discovery report.
 
-> **Status:** Phase 1 — project foundation (monorepo, API, web app, database connectivity,
-> tooling). Product features land in later phases.
+> **Status:** Phase 2 — accounts (sign-up, sign-in, sessions), database migrations and
+> owner-scoped project management. Discovery research lands in later phases.
 
 ## Repository layout
 
@@ -33,21 +33,37 @@ Makefile            Developer commands (`make help`)
 
 ```bash
 cp .env.example .env
-make up            # docker compose up --build
+# Set BETTER_AUTH_SECRET in .env, e.g. to the output of: openssl rand -base64 32
+make up            # docker compose up --build (the API applies migrations on start)
 ```
 
-- Web: http://localhost:3000 (redirects to `/dashboard`)
+- Web: http://localhost:3000 — create an account at `/signup`
 - API: http://localhost:8000 — interactive docs at http://localhost:8000/docs
 
 ## Local development (without Docker for the apps)
 
 ```bash
 make install       # pnpm install + uv sync
-cp .env.example .env
+cp .env.example .env   # then set BETTER_AUTH_SECRET
 make db-up         # PostgreSQL in Docker (or point DATABASE_URL at your own server)
-make dev-api       # terminal 1: FastAPI on :8000 with auto-reload
+make dev-api       # terminal 1: applies migrations, then FastAPI on :8000 with auto-reload
 make dev-web       # terminal 2: Next.js on :3000 with hot reload
 ```
+
+The web app reads the root `.env` too, so one file configures everything.
+
+## Database migrations
+
+Alembic (in `apps/api`) owns **every** table, including the auth tables Better Auth uses.
+
+| Command                        | What it does                                  |
+| ------------------------------ | --------------------------------------------- |
+| `make migrate`                 | Apply all pending migrations                  |
+| `make migration m="add thing"` | Generate a migration from model changes       |
+| `make migrate-down`            | Roll back the latest migration                |
+| `make migrate-check`           | Fail if models and migrations are out of sync |
+
+Never change the database schema by hand: add a migration.
 
 ## Quality checks
 
@@ -62,7 +78,11 @@ make dev-web       # terminal 2: Next.js on :3000 with hot reload
 | `make format`               | Ruff format/fix + Prettier write                    |
 | `make build`                | Production build of the web app                     |
 
-First E2E run: `pnpm --filter @buildscope/e2e exec playwright install chromium`
+API tests need PostgreSQL: they create and migrate `TEST_DATABASE_URL` (default
+`buildscope_test`, so the database user needs `CREATEDB`) and roll back each test.
+
+E2E tests sign up many users quickly, so start the web app with `AUTH_RATE_LIMIT_ENABLED=false`
+for E2E runs only. First E2E run: `pnpm --filter @buildscope/e2e exec playwright install chromium`
 (or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an existing Chromium).
 
 ## API endpoints
@@ -79,7 +99,8 @@ generated) and each request is logged with method, path, status and duration.
 
 All variables are documented in [`.env.example`](.env.example). Copy it to `.env`;
 **never commit `.env`**. Web variables are server-side only — the browser talks to the
-Next.js server (`/api/health`), which calls the API, so no API URL or secret reaches the client.
+Next.js server, which calls the API, so no API URL, token or secret reaches the client.
+`BETTER_AUTH_SECRET` is required at runtime but not at build time.
 
 ## Git workflow
 

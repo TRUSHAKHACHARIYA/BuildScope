@@ -29,14 +29,36 @@ services:
     env_file:
       - path: .env
         required: false
+    # Apply migrations, then serve with auto-reload.
+    command:
+      [
+        "sh",
+        "-c",
+        "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+      ]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-buildscope}:${POSTGRES_PASSWORD:-buildscope}@postgres:5432/${POSTGRES_DB:-buildscope}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      # The API fetches signing keys from the web container; tokens name the public URL as issuer.
+      AUTH_JWKS_URL: http://web:3000/api/auth/jwks
+      AUTH_JWT_ISSUER: ${BETTER_AUTH_URL:-http://localhost:3000}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./apps/api/app:/app/app
+      - ./apps/api/migrations:/app/migrations
       - ./apps/api/tests:/app/tests
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,6 +70,10 @@ services:
       target: dev
     environment:
       API_INTERNAL_URL: http://api:8000
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
+      AUTH_DATABASE_URL: postgresql://${POSTGRES_USER:-buildscope}:${POSTGRES_PASSWORD:-buildscope}@postgres:5432/${POSTGRES_DB:-buildscope}
+      AUTH_RATE_LIMIT_ENABLED: ${AUTH_RATE_LIMIT_ENABLED:-true}
       WATCHPACK_POLLING: "true"
     ports:
       - "${WEB_PORT:-3000}:3000"
@@ -56,7 +82,9 @@ services:
       - ./apps/web/public:/repo/apps/web/public
       - ./packages/shared/src:/repo/packages/shared/src
     depends_on:
-      - api
+      # The API applies the migrations that create the auth tables.
+      api:
+        condition: service_healthy
 
 volumes:
   postgres-data:
