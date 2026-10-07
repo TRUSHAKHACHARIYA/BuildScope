@@ -1,0 +1,62 @@
+# Local development stack: PostgreSQL, FastAPI (auto-reload) and Next.js (hot reload).
+#   cp .env.example .env && docker compose up --build
+name: buildscope
+
+services:
+  postgres:
+    # pgvector image so vector search can be enabled later without changing images.
+    # The extension is NOT enabled yet.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-buildscope}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-buildscope}
+      POSTGRES_DB: ${POSTGRES_DB:-buildscope}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: apps/api
+      dockerfile: ../../infra/docker/api.Dockerfile
+      target: dev
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-buildscope}:${POSTGRES_PASSWORD:-buildscope}@postgres:5432/${POSTGRES_DB:-buildscope}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./apps/api/app:/app/app
+      - ./apps/api/tests:/app/tests
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      target: dev
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    volumes:
+      - ./apps/web/src:/repo/apps/web/src
+      - ./apps/web/public:/repo/apps/web/public
+      - ./packages/shared/src:/repo/packages/shared/src
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
